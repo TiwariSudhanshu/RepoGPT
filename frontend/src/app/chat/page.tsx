@@ -3,6 +3,9 @@
 import Navbar from "@/components/Navbar";
 import { Send, Loader2 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { analyzeRepository } from "@/lib/api";
+import { getApiKey } from "@/lib/apiKeyStorage";
 
 interface Message {
   id: string;
@@ -12,6 +15,8 @@ interface Message {
 }
 
 export default function ChatPage() {
+  const searchParams = useSearchParams();
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -23,6 +28,10 @@ export default function ChatPage() {
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [repoOwner, setRepoOwner] = useState(searchParams.get("owner") || "");
+  const [repoName, setRepoName] = useState(searchParams.get("repo") || "");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isRepositoryIndexed, setIsRepositoryIndexed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -63,6 +72,85 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, assistantMessage]);
       setIsLoading(false);
     }, 1500);
+  };
+
+  const handleAnalyzeRepository = async () => {
+    console.log("Analyze button clicked", { repoOwner, repoName });
+
+    if (!repoOwner.trim() || !repoName.trim()) {
+      console.warn("Missing repo details");
+      alert("Please enter both repository owner and name");
+      return;
+    }
+
+    // Only access localStorage on client side
+    if (typeof window === "undefined") {
+      console.warn("Not in browser environment");
+      alert("This feature only works in the browser");
+      return;
+    }
+
+    console.log("Attempting to retrieve API key...");
+    const storedApi = getApiKey(); // Get last used provider automatically
+
+    if (!storedApi) {
+      console.error("❌ No API key found in localStorage");
+      console.log("📦 All localStorage keys:", Object.keys(localStorage));
+      alert(
+        "❌ No API key saved!\n\n✏️ Steps to fix:\n1. Click 'API Keys' button in navbar\n2. Select provider (OpenAI, Gemini, or Anthropic)\n3. Paste your API key\n4. Click 'Save API Key'\n5. Then try analyzing again\n\n💡 Check browser console (F12) for details",
+      );
+      return;
+    }
+
+    console.log("✅ API key found:", {
+      provider: storedApi.provider,
+      model: storedApi.model,
+    });
+
+    setIsAnalyzing(true);
+    try {
+      // Sanitize collection name: lowercase and replace invalid chars with hyphens
+      const sanitizedCollectionName = `${repoOwner}-${repoName}`
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "-")
+        .replace(/-+/g, "-") // Remove consecutive hyphens
+        .replace(/^-|-$/g, ""); // Remove leading/trailing hyphens
+
+      const response = await analyzeRepository({
+        owner: repoOwner,
+        repo: repoName,
+        provider: storedApi.provider,
+        api_key: storedApi.apiKey,
+        collection_name: sanitizedCollectionName,
+      });
+
+      setIsRepositoryIndexed(true);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          content: `✅ Repository indexed successfully! ${response.chunks_indexed} chunks indexed. You can now ask questions about this repository.`,
+          role: "assistant",
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Error analyzing repository:", error);
+      alert(`Failed to analyze repository: ${errorMessage}`);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          content: `❌ Failed to analyze repository: ${errorMessage}`,
+          role: "assistant",
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -147,38 +235,58 @@ export default function ChatPage() {
           <div className="p-6 space-y-6 flex-1">
             <div>
               <label className="text-xs font-semibold text-neutral-400 uppercase">
+                Repository Owner
+              </label>
+              <input
+                type="text"
+                value={repoOwner}
+                onChange={(e) => setRepoOwner(e.target.value)}
+                placeholder="e.g., facebook"
+                className="w-full mt-2 px-4 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-white placeholder-neutral-500 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                disabled={isAnalyzing}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-neutral-400 uppercase">
                 Repository Name
               </label>
-              <p className="text-white font-medium mt-2">owner/repository</p>
+              <input
+                type="text"
+                value={repoName}
+                onChange={(e) => setRepoName(e.target.value)}
+                placeholder="e.g., react"
+                className="w-full mt-2 px-4 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-white placeholder-neutral-500 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                disabled={isAnalyzing}
+              />
             </div>
+
+            <button
+              onClick={handleAnalyzeRepository}
+              disabled={isAnalyzing || !repoOwner.trim() || !repoName.trim()}
+              className="w-full py-2 mt-4 text-sm bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isAnalyzing && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isAnalyzing ? "Analyzing..." : "Analyze Repository"}
+            </button>
 
             <div>
               <label className="text-xs font-semibold text-neutral-400 uppercase">
                 Indexing Status
               </label>
               <div className="mt-2 flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <p className="text-white text-sm">Indexed</p>
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    isRepositoryIndexed
+                      ? "bg-green-500 animate-pulse"
+                      : "bg-gray-500"
+                  }`}
+                />
+                <p className="text-white text-sm">
+                  {isRepositoryIndexed ? "Indexed" : "Not indexed"}
+                </p>
               </div>
             </div>
-
-            <div>
-              <label className="text-xs font-semibold text-neutral-400 uppercase">
-                Files Analyzed
-              </label>
-              <p className="text-white font-medium mt-2">247</p>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-neutral-400 uppercase">
-                Total Size
-              </label>
-              <p className="text-white font-medium mt-2">2.4 MB</p>
-            </div>
-
-            <button className="w-full py-2 mt-4 text-sm border border-neutral-800 rounded-lg text-neutral-300 hover:text-white hover:border-neutral-700 transition-colors">
-              Switch Repository
-            </button>
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import re
 from dotenv import load_dotenv
 
 from core.qa import answer_question
@@ -25,6 +26,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def sanitize_collection_name(name: str) -> str:
+    """
+    Sanitize collection name for Pinecone.
+    Must consist of lowercase alphanumeric characters and hyphens only.
+    """
+    # Convert to lowercase
+    name = name.lower()
+    # Replace invalid characters with hyphens
+    name = re.sub(r"[^a-z0-9-]", "-", name)
+    # Remove consecutive hyphens
+    name = re.sub(r"-+", "-", name)
+    # Remove leading/trailing hyphens
+    name = name.strip("-")
+    return name
 
 
 class AnswerRequest(BaseModel):
@@ -74,6 +91,16 @@ async def analyze(request: AnalyzeRequest):
     and indexing it into Pinecone vector store for RAG.
     """
     try:
+        # Sanitize collection name for Pinecone
+        sanitized_collection_name = sanitize_collection_name(request.collection_name)
+        print(f"\n{'='*60}")
+        print(f"📋 ANALYZE REQUEST")
+        print(f"{'='*60}")
+        print(f"Repository: {request.owner}/{request.repo}")
+        print(f"Provider: {request.provider}")
+        print(f"Collection: {request.collection_name} → {sanitized_collection_name}")
+        print(f"{'='*60}\n")
+        
         print(f"Starting analysis of {request.owner}/{request.repo}")
         
         # Step 1: Load repository from GitHub
@@ -104,25 +131,31 @@ async def analyze(request: AnalyzeRequest):
             provider=request.provider,
             api_key=request.api_key,
             pinecone_api_key=os.getenv("PINECONE_API_KEY"),
-            collection_name=request.collection_name,
+            collection_name=sanitized_collection_name,
             embed_api_key=request.embed_api_key
         )
         
         print(f"Successfully indexed {len(chunks)} chunks")
+        print(f"{'='*60}")
         
         return AnalyzeResponse(
             status="success",
             message=f"Successfully analyzed {request.owner}/{request.repo}",
             owner=request.owner,
             repo=request.repo,
-            collection_name=request.collection_name,
+            collection_name=sanitized_collection_name,
             chunks_indexed=len(chunks)
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error during analysis: {str(e)}")
+        print(f"{'='*60}")
+        print(f"❌ ERROR during analysis: {str(e)}")
+        print(f"{'='*60}")
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Error analyzing repository: {str(e)}"
@@ -132,6 +165,9 @@ async def analyze(request: AnalyzeRequest):
 @app.post("/answer", response_model=AnswerResponse)
 async def answer(request: AnswerRequest):
     try:
+        # Sanitize collection name for Pinecone
+        sanitized_collection_name = sanitize_collection_name(request.collection_name)
+        
         # Get embeddings
         embed_key = request.embed_api_key or request.api_key
         embeddings, _ = get_embeddings(request.provider, embed_key)
@@ -139,7 +175,7 @@ async def answer(request: AnswerRequest):
         # Initialize Pinecone directly (no LangChain wrapper)
         from pinecone import Pinecone as PineconeClient
         pc = PineconeClient(api_key=os.getenv("PINECONE_API_KEY"))
-        index = pc.Index(request.collection_name)
+        index = pc.Index(sanitized_collection_name)
         vector_store = {"index": index, "embeddings_model": embeddings}
         
         # Search for relevant code

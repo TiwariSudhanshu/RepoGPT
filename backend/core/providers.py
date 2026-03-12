@@ -10,34 +10,51 @@ SUPPORTED_MODELS = {
     "gemini": ["gemini-2.0-flash", "gemini-1.5-pro"],
 }
 
+# Explicit embedding model choices
+EMBEDDING_MODELS = {
+    "openai": "text-embedding-3-small",      # 1536 dimensions
+    "anthropic": "text-embedding-3-small",   # 1536 dimensions
+    "gemini": "models/gemini-embedding-001", # 768 dimensions
+}
+
 EMBEDDING_DIMENSIONS = {
-    "openai": 1536,
-    "anthropic": 1536,  # Using OpenAI embeddings (1536 dimensions)
-    "gemini": 768,      # Using Gemini embeddings (768 dimensions)
+    "openai": 1536,       # text-embedding-3-small → 1536 dims
+    "anthropic": 1536,    # Uses OpenAI text-embedding-3-small → 1536 dims
+    "gemini": 3072,       # models/gemini-embedding-001 → 3072 dims
 }
 
 
 def get_embeddings(provider, embed_api_key):
+    print(f"🔧 Getting embeddings for provider: {provider}")
 
     if provider == "openai":
-        return OpenAIEmbeddings(
+        print(f"📦 Using OpenAI model: {EMBEDDING_MODELS['openai']} (1536 dims)")
+        # Be explicit about model and dimensions
+        embeddings = OpenAIEmbeddings(
             api_key=embed_api_key,
-            model="text-embedding-3-small"
-        ), EMBEDDING_DIMENSIONS["openai"]
+            model=EMBEDDING_MODELS["openai"],
+            dimensions=1536  # Explicitly set dimensions for text-embedding-3-small
+        )
+        return embeddings, EMBEDDING_DIMENSIONS["openai"]
 
     elif provider == "anthropic":
         # Use OpenAI embeddings for Anthropic (Anthropic doesn't have embeddings API)
-        return OpenAIEmbeddings(
+        print(f"📦 Using OpenAI model for Anthropic: {EMBEDDING_MODELS['anthropic']} (1536 dims)")
+        embeddings = OpenAIEmbeddings(
             api_key=embed_api_key,
-            model="text-embedding-3-small"
-        ), EMBEDDING_DIMENSIONS["openai"]
+            model=EMBEDDING_MODELS["anthropic"],
+            dimensions=1536  # Explicitly set dimensions for text-embedding-3-small
+        )
+        return embeddings, EMBEDDING_DIMENSIONS["anthropic"]
 
     elif provider == "gemini":
         # Use Gemini embedding model with same API key
-        return GoogleGenerativeAIEmbeddings(
+        print(f"📦 Using Gemini model: {EMBEDDING_MODELS['gemini']} (768 dims)")
+        embeddings = GoogleGenerativeAIEmbeddings(
             google_api_key=embed_api_key,
-            model="models/gemini-embedding-001"
-        ), EMBEDDING_DIMENSIONS["gemini"]
+            model=EMBEDDING_MODELS["gemini"]
+        )
+        return embeddings, EMBEDDING_DIMENSIONS["gemini"]
 
     else:
         raise ValueError(f"Unsupported provider '{provider}'. Choose from: openai, anthropic, gemini")

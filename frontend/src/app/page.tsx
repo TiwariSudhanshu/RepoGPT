@@ -4,9 +4,35 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Github, ArrowRight, Database, Zap, Brain } from "lucide-react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
+  const router = useRouter();
+
+  const handleAnalyzeRepository = () => {
+    if (!repoUrl.trim()) {
+      alert("Please enter a repository URL");
+      return;
+    }
+
+    // Parse GitHub URL to extract owner and repo
+    // Supports: https://github.com/owner/repo or github.com/owner/repo
+    const match = repoUrl.match(
+      /(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/]+)\/([^\/]+)/,
+    );
+
+    if (!match) {
+      alert("Invalid GitHub URL. Use format: https://github.com/owner/repo");
+      return;
+    }
+
+    const owner = match[1];
+    const repo = match[2].replace(/\.git$/, ""); // Remove .git suffix if present
+
+    // Navigate to chat page with repo info
+    router.push(`/chat?owner=${owner}&repo=${repo}`);
+  };
 
   return (
     <main className="w-full min-h-screen bg-gradient-to-b from-black via-neutral-950 to-black">
@@ -36,7 +62,10 @@ export default function Home() {
                 placeholder="https://github.com/owner/repository"
                 className="flex-1 px-6 py-4 bg-neutral-900 border border-neutral-800 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500 transition-colors"
               />
-              <button className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold rounded-lg transition-all hover:shadow-lg hover:shadow-blue-500/20 flex items-center justify-center gap-2 whitespace-nowrap">
+              <button
+                onClick={handleAnalyzeRepository}
+                className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold rounded-lg transition-all hover:shadow-lg hover:shadow-blue-500/20 flex items-center justify-center gap-2 whitespace-nowrap"
+              >
                 <span>Analyze Repository</span>
                 <ArrowRight className="w-4 h-4" />
               </button>

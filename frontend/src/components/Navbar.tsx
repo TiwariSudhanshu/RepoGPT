@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Github, Code2, X, Key, ChevronDown, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
+import { saveApiKey } from "@/lib/apiKeyStorage";
 
 const PROVIDERS = [
   {
@@ -39,6 +40,46 @@ export default function Navbar() {
     setIsModalOpen(false);
     setApiKey("");
     setShowKey(false);
+  };
+
+  const handleSaveApiKey = () => {
+    console.log("Save API key button clicked");
+    console.log("Selected provider:", selectedProvider.id);
+    console.log("Selected model:", selectedModel);
+    console.log("API key provided:", !!apiKey);
+
+    if (!apiKey.trim()) {
+      console.warn("API key is empty");
+      alert("Please enter an API key");
+      return;
+    }
+
+    try {
+      saveApiKey(selectedProvider.id, selectedModel, apiKey);
+      console.log("saveApiKey function executed successfully");
+
+      // Verify it was saved
+      const verified =
+        typeof window !== "undefined"
+          ? localStorage.getItem(`repo-gpt-api-key-${selectedProvider.id}`)
+          : null;
+
+      if (verified) {
+        console.log("✅ API key successfully saved to localStorage");
+        alert(
+          `✅ ${selectedProvider.name} API key saved successfully!\n\nModel: ${selectedModel}`,
+        );
+        handleClose();
+      } else {
+        console.error("❌ API key was not saved to localStorage");
+        alert("Error: API key was not saved. Check console for details.");
+      }
+    } catch (error) {
+      console.error("Error saving API key:", error);
+      alert(
+        `Error saving API key: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    }
   };
 
   return (
@@ -215,6 +256,7 @@ export default function Navbar() {
                 Cancel
               </button>
               <button
+                onClick={handleSaveApiKey}
                 className="flex-1 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg text-sm font-medium transition-all hover:shadow-lg hover:shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
                 disabled={!apiKey.trim()}
               >
