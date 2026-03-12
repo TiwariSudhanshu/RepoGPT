@@ -2,12 +2,16 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
-from qdrant_client import QdrantClient
-from langchain_community.vectorstores import Qdrant
-from core.qa import answer_question
-from core.vector_store import search_code
-from core.providers import get_embeddings
+import os
+from dotenv import load_dotenv
 
+from core.qa import answer_question
+from core.vector_store import search_code, index_chunks
+from core.providers import get_embeddings
+from core.github import load_repo
+from core.chunker import chunk_documents
+
+load_dotenv()
 
 app = FastAPI(
     title="RepoGPT API",
@@ -30,10 +34,8 @@ class AnswerRequest(BaseModel):
     provider: str
     model: str
     api_key: str
-    qdrant_url: str
-    qdrant_api_key: str
     embed_api_key: Optional[str] = None
-    collection_name: str = "repo_vectors"
+    collection_name: str = "repo-gpt"
 
 class AnswerResponse(BaseModel):
     answer: str
@@ -41,38 +43,104 @@ class AnswerResponse(BaseModel):
     provider: str
     model: str
 
+
+class AnalyzeRequest(BaseModel):
+    owner: str
+    repo: str
+    provider: str
+    api_key: str
+    embed_api_key: Optional[str] = None
+    collection_name: str = "repo-gpt"
+    github_token: Optional[str] = None
+
+
+class AnalyzeResponse(BaseModel):
+    status: str
+    message: str
+    owner: str
+    repo: str
+    collection_name: str
+    chunks_indexed: int
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
 
 
+@app.post("/analyze", response_model=AnalyzeResponse)
+async def analyze(request: AnalyzeRequest):
+    """
+    Analyze a GitHub repository by loading its code, chunking it, 
+    and indexing it into Pinecone vector store for RAG.
+    """
+    try:
+        print(f"Starting analysis of {request.owner}/{request.repo}")
+        
+        # Step 1: Load repository from GitHub
+        print("Loading repository from GitHub...")
+        documents = load_repo(
+            request.owner,
+            request.repo,
+            github_token=request.github_token
+        )
+        
+        if not documents:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No files found in {request.owner}/{request.repo}"
+            )
+        
+        print(f"Loaded {len(documents)} files from repository")
+        
+        # Step 2: Chunk documents
+        print("Chunking documents...")
+        chunks = chunk_documents(documents)
+        print(f"Created {len(chunks)} chunks")
+        
+        # Step 3: Index chunks into Pinecone
+        print("Indexing chunks into Pinecone...")
+        vector_store = index_chunks(
+            chunks=chunks,
+            provider=request.provider,
+            api_key=request.api_key,
+            pinecone_api_key=os.getenv("PINECONE_API_KEY"),
+            collection_name=request.collection_name,
+            embed_api_key=request.embed_api_key
+        )
+        
+        print(f"Successfully indexed {len(chunks)} chunks")
+        
+        return AnalyzeResponse(
+            status="success",
+            message=f"Successfully analyzed {request.owner}/{request.repo}",
+            owner=request.owner,
+            repo=request.repo,
+            collection_name=request.collection_name,
+            chunks_indexed=len(chunks)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error during analysis: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error analyzing repository: {str(e)}"
+        )
+
+
 @app.post("/answer", response_model=AnswerResponse)
 async def answer(request: AnswerRequest):
     try:
-        # Validate Qdrant connection
-        client = QdrantClient(
-            url=request.qdrant_url,
-            api_key=request.qdrant_api_key
-        )
-        
-        # Check if collection exists
-        collections = [c.name for c in client.get_collections().collections]
-        if request.collection_name not in collections:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Collection '{request.collection_name}' not found. Available collections: {collections}"
-            )
-        
         # Get embeddings
         embed_key = request.embed_api_key or request.api_key
         embeddings, _ = get_embeddings(request.provider, embed_key)
         
-        # Create vector store
-        vector_store = Qdrant(
-            client=client,
-            collection_name=request.collection_name,
-            embeddings=embeddings
-        )
+        # Initialize Pinecone directly (no LangChain wrapper)
+        from pinecone import Pinecone as PineconeClient
+        pc = PineconeClient(api_key=os.getenv("PINECONE_API_KEY"))
+        index = pc.Index(request.collection_name)
+        vector_store = {"index": index, "embeddings_model": embeddings}
         
         # Search for relevant code
         docs = search_code(vector_store, request.owner, request.repo, request.question)
@@ -102,12 +170,7 @@ async def answer(request: AnswerRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
-    
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-    
 
 if __name__ == "__main__":
     import uvicorn

@@ -12,8 +12,8 @@ SUPPORTED_MODELS = {
 
 EMBEDDING_DIMENSIONS = {
     "openai": 1536,
-    "anthropic": 1024,
-    "gemini": 768,
+    "anthropic": 1536,  # Using OpenAI embeddings (1536 dimensions)
+    "gemini": 768,      # Using Gemini embeddings (768 dimensions)
 }
 
 
@@ -26,15 +26,17 @@ def get_embeddings(provider, embed_api_key):
         ), EMBEDDING_DIMENSIONS["openai"]
 
     elif provider == "anthropic":
-        return VoyageAIEmbeddings(
-            voyage_api_key=embed_api_key,
-            model="voyage-3"
-        ), EMBEDDING_DIMENSIONS["anthropic"]
+        # Use OpenAI embeddings for Anthropic (Anthropic doesn't have embeddings API)
+        return OpenAIEmbeddings(
+            api_key=embed_api_key,
+            model="text-embedding-3-small"
+        ), EMBEDDING_DIMENSIONS["openai"]
 
     elif provider == "gemini":
+        # Use Gemini embedding model with same API key
         return GoogleGenerativeAIEmbeddings(
             google_api_key=embed_api_key,
-            model="models/embedding-001"
+            model="models/gemini-embedding-001"
         ), EMBEDDING_DIMENSIONS["gemini"]
 
     else:
