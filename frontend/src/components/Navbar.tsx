@@ -116,7 +116,7 @@ export default function Navbar() {
               Chat
             </Link>
             <a
-              href="https://github.com/owner/repository"
+              href="https://github.com/TiwariSudhanshu/RepoGPT"
               target="_blank"
               rel="noopener noreferrer"
               className="text-neutral-300 hover:text-white transition-colors flex items-center gap-2"
