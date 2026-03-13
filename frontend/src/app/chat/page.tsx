@@ -9,6 +9,7 @@ import { getApiKey } from "@/lib/apiKeyStorage";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Suspense } from "react";
 
 interface Message {
   id: string;
@@ -17,7 +18,7 @@ interface Message {
   timestamp: Date;
 }
 
-export default function ChatPage() {
+function ChatContent() {
   const searchParams = useSearchParams();
 
   const [messages, setMessages] = useState<Message[]>([
@@ -366,5 +367,13 @@ export default function ChatPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ChatContent />
+    </Suspense>
   );
 }
