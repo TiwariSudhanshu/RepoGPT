@@ -1,7 +1,6 @@
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langchain_voyageai import VoyageAIEmbeddings
 
 
 SUPPORTED_MODELS = {
