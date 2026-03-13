@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import { Send, Loader2 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { analyzeRepository } from "@/lib/api";
+import { analyzeRepository, askQuestion } from "@/lib/api";
 import { getApiKey } from "@/lib/apiKeyStorage";
 
 interface Message {
@@ -43,10 +43,15 @@ export default function ChatPage() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!input.trim()) return;
+
+    if (!isRepositoryIndexed) {
+      alert("Please analyze a repository first before asking questions.");
+      return;
+    }
 
     // Add user message
     const userMessage: Message = {
@@ -60,18 +65,56 @@ export default function ChatPage() {
     setInput("");
     setIsLoading(true);
 
-    // Simulate AI response delay
-    setTimeout(() => {
+    try {
+      const storedApi = getApiKey();
+
+      if (!storedApi) {
+        throw new Error(
+          "No API key found. Please configure your API key in the API Keys settings.",
+        );
+      }
+
+      // Sanitize collection name to match backend
+      const sanitizedCollectionName = `${repoOwner}-${repoName}`
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "");
+
+      const response = await askQuestion({
+        owner: repoOwner,
+        repo: repoName,
+        question: userMessage.content,
+        provider: storedApi.provider,
+        model: storedApi.model,
+        api_key: storedApi.apiKey,
+        collection_name: sanitizedCollectionName,
+      });
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content:
-          "This is a simulated response. In a real implementation, this would be replaced with actual AI-generated responses based on the repository's code analysis. The AI would retrieve relevant code snippets and provide meaningful answers to your questions.",
+        content: response.answer,
         role: "assistant",
         timestamp: new Date(),
       };
+
       setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "An unknown error occurred";
+      console.error("Error asking question:", error);
+
+      const errorAssistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: `❌ Error: ${errorMessage}`,
+        role: "assistant",
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, errorAssistantMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleAnalyzeRepository = async () => {

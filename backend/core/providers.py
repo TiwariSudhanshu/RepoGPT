@@ -7,14 +7,14 @@ from langchain_voyageai import VoyageAIEmbeddings
 SUPPORTED_MODELS = {
     "openai": ["gpt-4o", "gpt-4o-mini"],
     "anthropic": ["claude-sonnet-4-5", "claude-3-5-haiku-20241022"],
-    "gemini": ["gemini-2.0-flash", "gemini-1.5-pro"],
+    "gemini": ["models/gemini-2.5-flash", "models/gemini-2.5-pro"],
 }
 
 # Explicit embedding model choices
 EMBEDDING_MODELS = {
     "openai": "text-embedding-3-small",      # 1536 dimensions
     "anthropic": "text-embedding-3-small",   # 1536 dimensions
-    "gemini": "models/gemini-embedding-001", # 768 dimensions
+    "gemini": "models/gemini-embedding-001", # 3072 dimensions
 }
 
 EMBEDDING_DIMENSIONS = {
@@ -49,7 +49,7 @@ def get_embeddings(provider, embed_api_key):
 
     elif provider == "gemini":
         # Use Gemini embedding model with same API key
-        print(f"📦 Using Gemini model: {EMBEDDING_MODELS['gemini']} (768 dims)")
+        print(f"📦 Using Gemini model: {EMBEDDING_MODELS['gemini']} (3072 dims)")
         embeddings = GoogleGenerativeAIEmbeddings(
             google_api_key=embed_api_key,
             model=EMBEDDING_MODELS["gemini"]
@@ -58,6 +58,17 @@ def get_embeddings(provider, embed_api_key):
 
     else:
         raise ValueError(f"Unsupported provider '{provider}'. Choose from: openai, anthropic, gemini")
+
+
+# Map outdated/stale Gemini model names to current supported ones
+GEMINI_MODEL_ALIASES = {
+    "gemini-1.5-flash": "models/gemini-2.5-flash",
+    "gemini-1.5-pro": "models/gemini-2.5-pro",
+    "gemini-2.0-flash": "models/gemini-2.0-flash",
+    "models/gemini-1.5-flash": "models/gemini-2.5-flash",
+    "models/gemini-1.5-pro": "models/gemini-2.5-pro",
+    "gemini-2.0-flash-exp": "models/gemini-2.0-flash",
+}
 
 
 def get_llm(provider, model, api_key):
@@ -69,7 +80,10 @@ def get_llm(provider, model, api_key):
         return ChatAnthropic(api_key=api_key, model=model)
 
     elif provider == "gemini":
-        return ChatGoogleGenerativeAI(google_api_key=api_key, model=model)
+        resolved_model = GEMINI_MODEL_ALIASES.get(model, model)
+        if resolved_model != model:
+            print(f"⚠️  Remapping stale Gemini model '{model}' → '{resolved_model}'")
+        return ChatGoogleGenerativeAI(google_api_key=api_key, model=resolved_model)
 
     else:
         raise ValueError(f"Unsupported provider '{provider}'. Choose from: openai, anthropic, gemini")

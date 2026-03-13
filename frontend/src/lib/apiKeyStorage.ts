@@ -97,6 +97,22 @@ export function getApiKey(provider?: string): StoredApiKey | null {
     }
 
     const data = JSON.parse(stored) as StoredApiKey;
+
+    // Remap stale Gemini model names saved in localStorage
+    const GEMINI_MODEL_ALIASES: Record<string, string> = {
+      "gemini-1.5-flash": "models/gemini-2.5-flash",
+      "gemini-1.5-pro": "models/gemini-2.5-pro",
+      "models/gemini-1.5-flash": "models/gemini-2.5-flash",
+      "models/gemini-1.5-pro": "models/gemini-2.5-pro",
+      "gemini-2.0-flash-exp": "models/gemini-2.0-flash",
+    };
+    if (data.provider === "gemini" && GEMINI_MODEL_ALIASES[data.model]) {
+      console.warn(
+        `⚠️ Remapping stale model '${data.model}' → '${GEMINI_MODEL_ALIASES[data.model]}'`,
+      );
+      data.model = GEMINI_MODEL_ALIASES[data.model];
+    }
+
     console.log(
       `✅ Successfully retrieved API key for provider: ${providerToUse}`,
       { model: data.model },
