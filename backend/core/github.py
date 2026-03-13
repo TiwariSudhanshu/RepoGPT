@@ -1,9 +1,13 @@
 import requests
 import base64
+import os
+from dotenv import load_dotenv
 
 
 MAX_FILES = 200
 MAX_FILE_SIZE = 200000
+
+load_dotenv()
 
 ALLOWED_EXTENSIONS = (
     ".py", ".js", ".ts", ".jsx", ".tsx",
@@ -12,11 +16,19 @@ ALLOWED_EXTENSIONS = (
 )
 
 
-def get_default_branch(owner, repo, github_token=None):
+def _github_headers() -> dict:
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        raise ValueError("GITHUB_TOKEN is not set. Add it to backend/.env.")
 
-    headers = {}
-    if github_token:
-        headers["Authorization"] = f"Bearer {github_token}"
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+
+def get_default_branch(owner, repo):
+    headers = _github_headers()
 
     url = f"https://api.github.com/repos/{owner}/{repo}"
     r = requests.get(url, headers=headers)
@@ -25,11 +37,8 @@ def get_default_branch(owner, repo, github_token=None):
     return r.json()["default_branch"]
 
 
-def get_repo_tree(owner, repo, branch, github_token=None):
-
-    headers = {}
-    if github_token:
-        headers["Authorization"] = f"Bearer {github_token}"
+def get_repo_tree(owner, repo, branch):
+    headers = _github_headers()
 
     url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1"
 
@@ -58,11 +67,8 @@ def get_repo_tree(owner, repo, branch, github_token=None):
     return files
 
 
-def get_file_content(owner, repo, path, github_token=None):
-
-    headers = {}
-    if github_token:
-        headers["Authorization"] = f"Bearer {github_token}"
+def get_file_content(owner, repo, path):
+    headers = _github_headers()
 
     url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
 
@@ -84,17 +90,17 @@ def get_file_content(owner, repo, path, github_token=None):
     return decoded
 
 
-def load_repo(owner, repo, github_token=None):
+def load_repo(owner, repo):
 
-    branch = get_default_branch(owner, repo, github_token)
+    branch = get_default_branch(owner, repo)
 
-    files = get_repo_tree(owner, repo, branch, github_token)
+    files = get_repo_tree(owner, repo, branch)
 
     documents = []
 
     for path in files:
 
-        content = get_file_content(owner, repo, path, github_token)
+        content = get_file_content(owner, repo, path)
 
         if content is None:
             continue

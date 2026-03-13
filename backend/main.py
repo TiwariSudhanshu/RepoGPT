@@ -68,7 +68,6 @@ class AnalyzeRequest(BaseModel):
     api_key: str
     embed_api_key: Optional[str] = None
     collection_name: str = "repo-gpt"
-    github_token: Optional[str] = None
 
 
 class AnalyzeResponse(BaseModel):
@@ -107,8 +106,7 @@ async def analyze(request: AnalyzeRequest):
         print("Loading repository from GitHub...")
         documents = load_repo(
             request.owner,
-            request.repo,
-            github_token=request.github_token
+            request.repo
         )
         
         if not documents:
