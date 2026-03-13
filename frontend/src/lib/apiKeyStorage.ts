@@ -44,10 +44,6 @@ export function saveApiKey(
     console.log(`Saved data:`, data);
   } catch (error) {
     console.error("Failed to save API key to localStorage:", error);
-    // Alert user if storage fails
-    if (error instanceof Error) {
-      alert(`Failed to save API key: ${error.message}`);
-    }
   }
 }
 

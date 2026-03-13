@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import { Github, ArrowRight, Database, Zap, Brain } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
@@ -12,7 +13,7 @@ export default function Home() {
 
   const handleAnalyzeRepository = () => {
     if (!repoUrl.trim()) {
-      alert("Please enter a repository URL");
+      toast.warning("Please enter a repository URL");
       return;
     }
 
@@ -23,7 +24,9 @@ export default function Home() {
     );
 
     if (!match) {
-      alert("Invalid GitHub URL. Use format: https://github.com/owner/repo");
+      toast.error(
+        "Invalid GitHub URL. Use format: https://github.com/owner/repo",
+      );
       return;
     }
 

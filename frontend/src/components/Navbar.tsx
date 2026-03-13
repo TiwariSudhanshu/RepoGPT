@@ -1,9 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { Github, Code2, X, Key, ChevronDown, Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
-import { saveApiKey } from "@/lib/apiKeyStorage";
+import {
+  Github,
+  Code2,
+  X,
+  Key,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  CheckCircle,
+} from "lucide-react";
+import { useState, useEffect } from "react";
+import { saveApiKey, getApiKey } from "@/lib/apiKeyStorage";
+import { toast } from "sonner";
 
 const PROVIDERS = [
   {
@@ -29,6 +39,11 @@ export default function Navbar() {
   const [selectedModel, setSelectedModel] = useState(PROVIDERS[0].models[0]);
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+
+  useEffect(() => {
+    setHasApiKey(!!getApiKey());
+  }, []);
 
   const handleProviderChange = (providerId: string) => {
     const provider = PROVIDERS.find((p) => p.id === providerId)!;
@@ -43,40 +58,29 @@ export default function Navbar() {
   };
 
   const handleSaveApiKey = () => {
-    console.log("Save API key button clicked");
-    console.log("Selected provider:", selectedProvider.id);
-    console.log("Selected model:", selectedModel);
-    console.log("API key provided:", !!apiKey);
-
     if (!apiKey.trim()) {
-      console.warn("API key is empty");
-      alert("Please enter an API key");
+      toast.warning("Please enter an API key");
       return;
     }
 
     try {
       saveApiKey(selectedProvider.id, selectedModel, apiKey);
-      console.log("saveApiKey function executed successfully");
-
-      // Verify it was saved
       const verified =
         typeof window !== "undefined"
           ? localStorage.getItem(`repo-gpt-api-key-${selectedProvider.id}`)
           : null;
 
       if (verified) {
-        console.log("✅ API key successfully saved to localStorage");
-        alert(
-          `✅ ${selectedProvider.name} API key saved successfully!\n\nModel: ${selectedModel}`,
-        );
+        setHasApiKey(true);
+        toast.success(`${selectedProvider.name} API key saved!`, {
+          description: `Model: ${selectedModel}`,
+        });
         handleClose();
       } else {
-        console.error("❌ API key was not saved to localStorage");
-        alert("Error: API key was not saved. Check console for details.");
+        toast.error("API key was not saved. Check console for details.");
       }
     } catch (error) {
-      console.error("Error saving API key:", error);
-      alert(
+      toast.error(
         `Error saving API key: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     }
@@ -122,8 +126,13 @@ export default function Navbar() {
             </a>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg text-sm font-medium transition-all"
+              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg text-sm font-medium transition-all flex items-center gap-2"
             >
+              {hasApiKey ? (
+                <CheckCircle className="w-4 h-4 text-green-300" />
+              ) : (
+                <Key className="w-4 h-4" />
+              )}
               API Keys
             </button>
           </div>

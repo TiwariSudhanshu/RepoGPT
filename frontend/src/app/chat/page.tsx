@@ -6,6 +6,9 @@ import { useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { analyzeRepository, askQuestion } from "@/lib/api";
 import { getApiKey } from "@/lib/apiKeyStorage";
+import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Message {
   id: string;
@@ -49,7 +52,9 @@ export default function ChatPage() {
     if (!input.trim()) return;
 
     if (!isRepositoryIndexed) {
-      alert("Please analyze a repository first before asking questions.");
+      toast.warning(
+        "Please analyze a repository first before asking questions.",
+      );
       return;
     }
 
@@ -122,14 +127,14 @@ export default function ChatPage() {
 
     if (!repoOwner.trim() || !repoName.trim()) {
       console.warn("Missing repo details");
-      alert("Please enter both repository owner and name");
+      toast.error("Please enter both repository owner and name");
       return;
     }
 
     // Only access localStorage on client side
     if (typeof window === "undefined") {
       console.warn("Not in browser environment");
-      alert("This feature only works in the browser");
+      toast.error("This feature only works in the browser");
       return;
     }
 
@@ -138,9 +143,8 @@ export default function ChatPage() {
 
     if (!storedApi) {
       console.error("❌ No API key found in localStorage");
-      console.log("📦 All localStorage keys:", Object.keys(localStorage));
-      alert(
-        "❌ No API key saved!\n\n✏️ Steps to fix:\n1. Click 'API Keys' button in navbar\n2. Select provider (OpenAI, Gemini, or Anthropic)\n3. Paste your API key\n4. Click 'Save API Key'\n5. Then try analyzing again\n\n💡 Check browser console (F12) for details",
+      toast.error(
+        "No API key saved! Click 'API Keys' in the navbar to add one.",
       );
       return;
     }
@@ -168,11 +172,14 @@ export default function ChatPage() {
       });
 
       setIsRepositoryIndexed(true);
+      toast.success(
+        `Repository indexed! ${response.chunks_indexed} chunks ready.`,
+      );
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now().toString(),
-          content: `✅ Repository indexed successfully! ${response.chunks_indexed} chunks indexed. You can now ask questions about this repository.`,
+          content: `✅ Repository **${repoOwner}/${repoName}** indexed successfully! **${response.chunks_indexed} chunks** indexed. You can now ask questions about this repository.`,
           role: "assistant",
           timestamp: new Date(),
         },
@@ -181,7 +188,7 @@ export default function ChatPage() {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
       console.error("Error analyzing repository:", error);
-      alert(`Failed to analyze repository: ${errorMessage}`);
+      toast.error(`Failed to analyze: ${errorMessage}`);
       setMessages((prev) => [
         ...prev,
         {
@@ -219,9 +226,34 @@ export default function ChatPage() {
                       : "bg-neutral-900 border border-neutral-800 text-neutral-100"
                   }`}
                 >
-                  <p className="leading-relaxed text-sm md:text-base">
-                    {message.content}
-                  </p>
+                  {message.role === "user" ? (
+                    <p className="leading-relaxed text-sm md:text-base">
+                      {message.content}
+                    </p>
+                  ) : (
+                    <div
+                      className="prose prose-invert prose-sm md:prose-base max-w-none
+                      prose-headings:text-white prose-headings:font-semibold
+                      prose-h1:text-lg prose-h2:text-base prose-h3:text-sm
+                      prose-p:text-neutral-200 prose-p:leading-relaxed prose-p:my-2
+                      prose-strong:text-white prose-strong:font-semibold
+                      prose-em:text-neutral-300
+                      prose-code:text-blue-300 prose-code:bg-neutral-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-mono prose-code:before:content-none prose-code:after:content-none
+                      prose-pre:bg-neutral-800 prose-pre:border prose-pre:border-neutral-700 prose-pre:rounded-lg prose-pre:p-4 prose-pre:my-3 prose-pre:overflow-x-auto
+                      prose-pre:text-xs
+                      prose-ul:my-2 prose-ul:space-y-1 prose-li:text-neutral-200 prose-li:my-0
+                      prose-ol:my-2 prose-ol:space-y-1
+                      prose-blockquote:border-l-blue-500 prose-blockquote:text-neutral-400 prose-blockquote:my-2
+                      prose-hr:border-neutral-700
+                      prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
+                      prose-table:text-sm prose-th:text-neutral-300 prose-td:text-neutral-300
+                    "
+                    >
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
